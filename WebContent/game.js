@@ -3,7 +3,6 @@ var game = new Phaser.Game(320, 480, Phaser.AUTO, 'phaser-example', { preload: p
 
 function preload() {
 
-    game.load.atlas('breakout', 'assets/games/breakout/breakout.png', 'assets/games/breakout/breakout.json');
     game.load.image('background', 'assets/misc/backgroundHudGlow.png');
     game.load.image('hud', 'assets/misc/hud.png');
     game.load.image('block', 'assets/blockgreen.png');
@@ -16,7 +15,6 @@ function preload() {
 
 var ball;
 var bricks;
-//var knocker;
 var arrow;
 var levelGraphics;
 var hud;
@@ -68,17 +66,17 @@ var levelDrawing = [
     [19*blockW, 10*blockW]
 ];
 
-var deadlyGroup = []; // an array which will be filled with enemies
+var deadlyGroup;
+
 var deadlyArrayKeepTrack = [];
-
 var wallArrayKeepTrack = [];
-
 var coinArrayKeepTrack = [];
 
 var lives = 3;
 var score = 0;
 var rotateSpeed = 3; // arrow rotation speed
 var rotateDirection = 1; // rotate direction: 1-clockwise, 2-counterclockwise
+var velocityFriction = 0.99;
 var degToRad=0.0174532925; // degrees-radians conversion
 var power = 0; // power to fire the ball
 var minPower = 50; // minimum power applied to ball
@@ -92,48 +90,17 @@ var introText;
 var s;
 
 function create() {
+    
+    deadlyArrayKeepTrack = [];
+    wallArrayKeepTrack = [];
+    coinArrayKeepTrack = [];
 
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
     s = game.add.tileSprite(0, 0, 320, 480, 'background');
     
-    levelGraphics = game.add.group();
-    levelGraphics.enableBody = true;
-    levelGraphics.physicsBodyType = Phaser.Physics.ARCADE;
-
-    for(i = 0; i < levelDrawing.length; i++) {
-        createLevelGraphics(levelDrawing[i][0],levelDrawing[i][1]);
-    }
-
-    bricks = game.add.group();
-    bricks.enableBody = true;
-    bricks.physicsBodyType = Phaser.Physics.ARCADE;
-
-    var coin;
-
-    for (var y = 0; y < 1; y++)
-    {
-        for (var x = 0; x < 8; x++)
-        {
-            //brick = bricks.create(Math.random()*game.width,Math.random()*game.height, 'breakout', 'brick_' + (y+1) + '_1.png');
-            do {
-                //var rndX = Math.random()*gamePlayWidth + 16;
-                //var rndY = Math.random()*gamePlayHeigth - 32;
-                var rndX = this.rnd.integerInRange(32, gamePlayWidth-32);
-                var rndY = this.rnd.integerInRange(32, gamePlayHeigth-32);
-                coin = bricks.create(rndX, rndY, 'coin');
-                var isoverlapping = isOverlapping(coin, wallArrayKeepTrack);
-                var isoverlapping3 = isOverlapping(coin, coinArrayKeepTrack);
-                if(isoverlapping || isoverlapping3)
-                    coin.kill();
-            } while (isoverlapping || isoverlapping3);
-            
-            coinArrayKeepTrack.push(coin);
-            
-            coin.body.bounce.set(1);
-            coin.body.immovable = true;
-        }
-    }
+    drawLevel();
+    drawCoins();
 
     ball = game.add.sprite(game.world.centerX,game.world.centerY, 'hero');
     ball.anchor.set(0.5);
@@ -147,15 +114,7 @@ function create() {
     //ball.animations.add('spin', [ 'ball_1.png', 'ball_2.png', 'ball_3.png', 'ball_4.png', 'ball_5.png' ], 50, true, false);
     
     //ball.scale.setTo(2, 2);
-    
-    deadlyGroup = game.add.group();
-    deadlyGroup.enableBody = true;
-    deadlyGroup.physicsBodyType = Phaser.Physics.ARCADE;
-    //var deadly;
-    
-    for(ii = 0; ii < 4; ii++) {
-        spawnNewDeadly();
-    }
+    drawDeadly();
     
     // the rotating arrow, look at its x registration point
     arrow = game.add.sprite(game.world.centerX,game.world.centerY,"arrow");
@@ -174,41 +133,48 @@ function create() {
     
     scoreText = game.add.text(5, 435, 'score: 0 - power: 0', { font: "16px Arial", fill: "#ffffff", align: "left" });
     livesText = game.add.text(5, 455, 'lives: 3', { font: "16px Arial", fill: "#ffffff", align: "left" });
+    introText = game.add.text(game.world.centerX, 240, '- click to start -', { font: "40px Arial", fill: "#ffffff", align: "center" });
+    introText.anchor.setTo(0.5, 0.5);
 
     game.input.onDown.add(releaseBall, this);
 
 }
 
 function update () {
-    game.physics.arcade.collide(ball, hud, ballHitHud, null, this);
-    game.physics.arcade.collide(ball, levelGraphics, ballHitKnocker, null, this);
-    game.physics.arcade.collide(ball, bricks, ballHitBrick, null, this);
-    game.physics.arcade.collide(ball, deadlyGroup, ballHitDeadly, null, this);
-    
-    if(charging) {
-        power = power + 10;
-        power = Math.min(power, maxPower);
-        // then game text is updated
-        scoreText.text = 'score: ' + score + ' - power: ' + power;
-    } else {
-        arrow.angle+=rotateSpeed*rotateDirection;
+    if (lives === 0)
+    {
+        gameOver();
     }
-    
-    // update arrow position
-    arrow.x=ball.x;
-    arrow.y=ball.y;
+    else
+    {
+        game.physics.arcade.collide(ball, hud, ballHitHud, null, this);
+        game.physics.arcade.collide(ball, levelGraphics, ballHitKnocker, null, this);
+        game.physics.arcade.collide(ball, bricks, ballHitBrick, null, this);
+        game.physics.arcade.collide(ball, deadlyGroup, ballHitDeadly, null, this);
 
-    deaccelareta();
+        if(charging) {
+            power = power + 10;
+            power = Math.min(power, maxPower);
+            // then game text is updated
+            scoreText.text = 'score: ' + score + ' - power: ' + power;
+        } else {
+            arrow.angle+=rotateSpeed*rotateDirection;
+        }
+
+        // update arrow position
+        arrow.x=ball.x;
+        arrow.y=ball.y;
+
+        deaccelareta();
+    }
 }
 
 function releaseBall () {
-
-        //ball.body.velocity.y = -300;
-        //ball.body.velocity.x = -75;
-        power = minPower;
-        game.input.onDown.remove(releaseBall, this);
-        game.input.onUp.add(fire, this);  
-        charging=true;
+    power = minPower;
+    game.input.onDown.remove(releaseBall, this);
+    game.input.onUp.add(fire, this);  
+    charging = true;
+    introText.visible = false;
 }
 
 function fire() {
@@ -220,19 +186,23 @@ function fire() {
     ball.animations.play('spin');
     
     power = 0;
-    charging=false; 
+    charging=false;
 
     rotateDirection*=-1;
 }
 
 function deaccelareta() {
-        ball.body.velocity.y*=0.99;
-        ball.body.velocity.x*=0.99;
+        ball.body.velocity.y*=velocityFriction;
+        ball.body.velocity.x*=velocityFriction;
 }
 
 function gameOver () {
 
     ball.body.velocity.setTo(0, 0);
+    introText.text = 'Game Over!';
+    introText.visible = true;
+    
+    game.input.onDown.add(reloadGame, this);
 
 }
 
@@ -247,18 +217,15 @@ function ballHitBrick (_ball, _brick) {
     //  Are they any bricks left?
     if (bricks.countLiving() == 0)
     {
-        //  New level starts
         score += 1000;
         scoreText.text = 'score: ' + score + ' - power: ' + power;
 
-        //  Let's move the ball back to the paddle
+        //  Let's move the ball
         ball.body.velocity.set(0);
         ball.x = 100 + 16;
         ball.y = 100 - 16;
-        ball.animations.stop();
 
-        //  And bring the bricks back from the dead :)
-        bricks.callAll('revive');
+        revive();
     }
 
 }
@@ -289,15 +256,65 @@ function spawnNewDeadly() {
         var isoverlapping = isOverlapping(deadly, wallArrayKeepTrack);
         var isoverlapping2 = isOverlapping(deadly, deadlyArrayKeepTrack);
         var isoverlapping3 = isOverlapping(deadly, coinArrayKeepTrack);
+        var isoverlapping4 = isOverlapping(deadly, ball);
         
-        if(isoverlapping || isoverlapping2 || isoverlapping3)
+        if(isoverlapping || isoverlapping2 || isoverlapping3 || isoverlapping4)
             deadly.kill();
-    } while (isoverlapping || isoverlapping2 || isoverlapping3);
+    } while (isoverlapping || isoverlapping2 || isoverlapping3 || isoverlapping4);
         
     deadlyArrayKeepTrack.push(deadly);
 
     deadly.body.bounce.set(0);
     deadly.body.immovable = true;
+}
+
+function drawLevel() {
+    levelGraphics = game.add.group();
+    levelGraphics.enableBody = true;
+    levelGraphics.physicsBodyType = Phaser.Physics.ARCADE;
+
+    for(i = 0; i < levelDrawing.length; i++) {
+        createLevelGraphics(levelDrawing[i][0],levelDrawing[i][1]);
+    }
+}
+
+function drawCoins() {
+    bricks = game.add.group();
+    bricks.enableBody = true;
+    bricks.physicsBodyType = Phaser.Physics.ARCADE;
+
+    var coin;
+
+    for (var x = 0; x < 1; x++)
+    {
+        do {
+            //var rndX = Math.random()*gamePlayWidth + 16;
+            //var rndY = Math.random()*gamePlayHeigth - 32;
+            var rndX = game.rnd.integerInRange(32, gamePlayWidth-32);
+            var rndY = game.rnd.integerInRange(32, gamePlayHeigth-32);
+            coin = bricks.create(rndX, rndY, 'coin');
+            var isoverlapping = isOverlapping(coin, wallArrayKeepTrack);
+            var isoverlapping3 = isOverlapping(coin, coinArrayKeepTrack);
+            if(isoverlapping || isoverlapping3)
+                coin.kill();
+        } while (isoverlapping || isoverlapping3);
+
+        coinArrayKeepTrack.push(coin);
+
+        coin.body.bounce.set(1);
+        coin.body.immovable = true;
+    }
+}
+
+function drawDeadly() {
+    deadlyGroup = game.add.group();
+    deadlyGroup.enableBody = true;
+    deadlyGroup.physicsBodyType = Phaser.Physics.ARCADE;
+    //var deadly;
+    
+    for(ii = 0; ii < 4; ii++) {
+        spawnNewDeadly();
+    }
 }
 
 function createLevelGraphics(_x, _y) {
@@ -325,4 +342,22 @@ function isOverlapping(_sprite, _list) {
     }
     
     return isAnyOverlapping;
+}
+
+function revive() {
+    rotateSpeed = rotateSpeed + 1;
+    velocityFriction = velocityFriction * 1.001;
+    
+    deadlyArrayKeepTrack = [];
+    coinArrayKeepTrack = [];
+    
+    deadlyGroup.removeAll(true);
+    bricks.removeAll(true);
+    
+    drawCoins();
+    drawDeadly();
+}
+
+function reloadGame() {
+    location.reload();
 }
