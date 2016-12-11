@@ -7,11 +7,14 @@ function preload() {
     game.load.image('hud', 'assets/misc/hud.png');
     game.load.image('block', 'assets/blockgreen.png');
     game.load.image('arrow', 'assets/arrow.png');
-    game.load.image('deadly', 'assets/blockdeadghost.png');
+    game.load.image('deadly', 'assets/blockdeadghost2.png');
     game.load.image('deadlyparticle', 'assets/ghostparticle.png');
-    game.load.image('coin', 'assets/coin.png');
+    game.load.image('coin', 'assets/coin2.png');
     game.load.image('hero', 'assets/misc/hero.png');
     game.load.image('powerbar', 'assets/blockgreen.png');
+    game.load.audio('backgroundmusic', ['assets/backgroundmusic.mp3']);
+    game.load.audio('explosionsnd', 'assets/ghostxplosion.mp3');
+    game.load.audio('coinsnd', 'assets/coin.mp3');
 
 }
 
@@ -21,6 +24,9 @@ var arrow;
 var levelGraphics;
 var hud;
 var powerbar;
+var music;
+var explosionsnd;
+var coinsnd;
 
 var emitter;
 
@@ -103,16 +109,18 @@ var deadlyArrayKeepTrack = [];
 var wallArrayKeepTrack = [];
 var coinArrayKeepTrack = [];
 
-var lives = 3;
-var score = 0;
-var rotateSpeed = 3; // arrow rotation speed
-var rotateDirection = 1; // rotate direction: 1-clockwise, 2-counterclockwise
-var velocityFriction = 0.99;
-var degToRad=0.0174532925; // degrees-radians conversion
-var power = 0; // power to fire the ball
-var minPower = 50; // minimum power applied to ball
-var maxPower = 400; // maximum power applied to ball
-var charging=false; // are we charging the power?
+var lives               = 3;
+var score               = 0;
+var rotateSpeed         = 3; // arrow rotation speed
+var rotateDirection     = 1; // rotate direction: 1-clockwise, 2-counterclockwise
+var velocityFriction    = 0.99;
+var degToRad            = 0.0174532925;
+var power               = 0;
+var minPower            = 50;
+var maxPower            = 400;
+var charging            = false;
+var numCoins            = 1;
+var onLevel             = 0;
 
 var scoreText;
 var livesText;
@@ -133,6 +141,15 @@ function create() {
     filter = new Phaser.Filter(game, null, fragmentSrc);
     filter.setResolution(320, 480);
     
+    music = game.add.audio('backgroundmusic');
+    music.volume = 0.4;
+    music.play();
+    
+    explosionsnd = game.add.audio('explosionsnd');
+    coinsnd = game.add.audio('coinsnd');
+    
+    //game.sound.setDecodedCallback([ music, explosionsnd, coinsnd ], start, this);
+    
     drawLevel();
     drawCoins();
 
@@ -145,9 +162,6 @@ function create() {
     ball.body.collideWorldBounds = true;
     ball.body.bounce.set(1);
 
-    //ball.animations.add('spin', [ 'ball_1.png', 'ball_2.png', 'ball_3.png', 'ball_4.png', 'ball_5.png' ], 50, true, false);
-    
-    //ball.scale.setTo(2, 2);
     drawDeadly();
     
     // the rotating arrow, look at its x registration point
@@ -259,6 +273,7 @@ function ballHitBrick (_ball, _brick) {
     s2.start();*/
 
     score += 10;
+    coinsnd.play();
 
     scoreText.text = 'score: ' + score;
     
@@ -269,11 +284,14 @@ function ballHitBrick (_ball, _brick) {
     {
         score += 1000;
         scoreText.text = 'score: ' + score;
+        onLevel += 1;
 
         //  Let's move the ball
         ball.body.velocity.set(0);
         ball.x = 100 + 16;
         ball.y = 100 - 16;
+        
+        music.volume = 1;
         
         levelGraphics.forEach(function(item){
             item.filters = [ filter ];
@@ -298,6 +316,8 @@ function ballHitDeadly(_ball, _deadly) {
     emitter.makeParticles('deadlyparticle', 0, 250, true, true);
     emitter.gravity = 200;
     emitter.bounce.setTo(0.5, 0.5);
+    
+    explosionsnd.play();
     
     particleBurst(_deadly.x, _deadly.y);
     _deadly.kill();
@@ -334,7 +354,7 @@ function spawnNewDeadly() {
         var isoverlapping = isOverlapping(deadly, wallArrayKeepTrack);
         var isoverlapping2 = isOverlapping(deadly, deadlyArrayKeepTrack);
         var isoverlapping3 = isOverlapping(deadly, coinArrayKeepTrack);
-        var isoverlapping4 = isOverlapping(deadly, ball);
+        var isoverlapping4 = isOverlappingObj(deadly, ball);
         
         if(isoverlapping || isoverlapping2 || isoverlapping3 || isoverlapping4)
             deadly.kill();
@@ -363,20 +383,19 @@ function drawCoins() {
 
     var coin;
 
-    for (var x = 0; x < 2; x++)
+    for (var x = 0; x < numCoins; x++)
     {
         do {
-            //var rndX = Math.random()*gamePlayWidth + 16;
-            //var rndY = Math.random()*gamePlayHeigth - 32;
             var rndX = game.rnd.integerInRange(32, gamePlayWidth-32);
             var rndY = game.rnd.integerInRange(32, gamePlayHeigth-32);
             coin = bricks.create(rndX, rndY, 'coin');
             coin.anchor.setTo(0.5, 0.5);
             var isoverlapping = isOverlapping(coin, wallArrayKeepTrack);
             var isoverlapping3 = isOverlapping(coin, coinArrayKeepTrack);
-            if(isoverlapping || isoverlapping3)
+            var isoverlapping4 = isOverlappingObj(coin, ball);
+            if(isoverlapping || isoverlapping3 || isoverlapping4)
                 coin.kill();
-        } while (isoverlapping || isoverlapping3);
+        } while (isoverlapping || isoverlapping3 || isoverlapping4);
 
         coinArrayKeepTrack.push(coin);
 
@@ -428,6 +447,12 @@ function isOverlapping(_sprite, _list) {
     return isAnyOverlapping;
 }
 
+function isOverlappingObj(_spriteA, _spriteB) {
+    var isAnyOverlapping = false;
+    isAnyOverlapping = game.physics.arcade.overlap(_spriteA, _spriteB);
+    return isAnyOverlapping;
+}
+
 function revive() {
     rotateSpeed = rotateSpeed + 1;
     velocityFriction = velocityFriction * 1.001;
@@ -435,6 +460,8 @@ function revive() {
             item.filters = null;
         });
     game.input.onDown.remove(revive, this);
+    
+    music.volume = 0.4;
     
     deadlyArrayKeepTrack = [];
     coinArrayKeepTrack = [];
