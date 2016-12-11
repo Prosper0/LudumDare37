@@ -119,7 +119,7 @@ var power               = 0;
 var minPower            = 50;
 var maxPower            = 400;
 var charging            = false;
-var numCoins            = 1;
+var numCoins            = 5;
 var onLevel             = 0;
 
 var scoreText;
