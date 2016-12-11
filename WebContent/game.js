@@ -243,11 +243,18 @@ function gameOver () {
 
 function ballHitBrick (_ball, _brick) {
 
-    _brick.kill();
+    /*var s = game.add.tween(_brick.scale);
+    var s2 = game.add.tween(_brick).to( { alpha: 0 }, 500, "Linear", true);
+    s.to({x: 20, y:20}, 500, Phaser.Easing.Linear.None);
+    s.onComplete.addOnce(function(){checkLiving(_brick);}, this);
+    s.start();
+    s2.start();*/
 
     score += 10;
 
     scoreText.text = 'score: ' + score + ' - power: ' + power;
+    
+    _brick.kill();
 
     //  Are they any bricks left?
     if (bricks.countLiving() == 0)
@@ -348,7 +355,7 @@ function drawCoins() {
 
     var coin;
 
-    for (var x = 0; x < 1; x++)
+    for (var x = 0; x < 2; x++)
     {
         do {
             //var rndX = Math.random()*gamePlayWidth + 16;
@@ -356,6 +363,7 @@ function drawCoins() {
             var rndX = game.rnd.integerInRange(32, gamePlayWidth-32);
             var rndY = game.rnd.integerInRange(32, gamePlayHeigth-32);
             coin = bricks.create(rndX, rndY, 'coin');
+            coin.anchor.setTo(0.5, 0.5);
             var isoverlapping = isOverlapping(coin, wallArrayKeepTrack);
             var isoverlapping3 = isOverlapping(coin, coinArrayKeepTrack);
             if(isoverlapping || isoverlapping3)
