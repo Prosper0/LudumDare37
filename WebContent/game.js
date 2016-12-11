@@ -11,6 +11,7 @@ function preload() {
     game.load.image('deadlyparticle', 'assets/ghostparticle.png');
     game.load.image('coin', 'assets/coin.png');
     game.load.image('hero', 'assets/misc/hero.png');
+    game.load.image('powerbar', 'assets/blockgreen.png');
 
 }
 
@@ -19,6 +20,7 @@ var bricks;
 var arrow;
 var levelGraphics;
 var hud;
+var powerbar;
 
 var emitter;
 
@@ -163,7 +165,12 @@ function create() {
     hud.body.bounce.set(1);
     hud.body.immovable = true;
     
-    scoreText = game.add.text(5, 435, 'score: 0 - power: 0', { font: "16px Arial", fill: "#ffffff", align: "left" });
+    powerbar = game.add.sprite(155, 444, 'powerbar');
+    powerbar.anchor.setTo(0.0, 0.5);
+    powerbar.scale.setTo(1, 0.5);
+    setPowerbar(0);
+    
+    scoreText = game.add.text(5, 435, 'score: 0', { font: "16px Arial", fill: "#ffffff", align: "left" });
     livesText = game.add.text(5, 455, 'lives: 3', { font: "16px Arial", fill: "#ffffff", align: "left" });
     introText = game.add.text(game.world.centerX, 240, '- click to start -', { font: "40px Arial", fill: "#ffffff", align: "center" });
     introText.anchor.setTo(0.5, 0.5);
@@ -189,10 +196,12 @@ function update () {
             power = power + 10;
             power = Math.min(power, maxPower);
             // then game text is updated
-            scoreText.text = 'score: ' + score + ' - power: ' + power;
         } else {
             arrow.angle+=rotateSpeed*rotateDirection;
         }
+        
+        setPowerbar(power);
+        scoreText.text = 'score: ' + score;
 
         // update arrow position
         arrow.x=ball.x;
@@ -218,7 +227,6 @@ function fire() {
     
     ball.body.velocity.y += Math.sin(arrow.angle*degToRad)*power/2;
     ball.body.velocity.x += Math.cos(arrow.angle*degToRad)*power/2;
-    ball.animations.play('spin');
     
     power = 0;
     charging=false;
@@ -252,7 +260,7 @@ function ballHitBrick (_ball, _brick) {
 
     score += 10;
 
-    scoreText.text = 'score: ' + score + ' - power: ' + power;
+    scoreText.text = 'score: ' + score;
     
     _brick.kill();
 
@@ -260,7 +268,7 @@ function ballHitBrick (_ball, _brick) {
     if (bricks.countLiving() == 0)
     {
         score += 1000;
-        scoreText.text = 'score: ' + score + ' - power: ' + power;
+        scoreText.text = 'score: ' + score;
 
         //  Let's move the ball
         ball.body.velocity.set(0);
@@ -386,6 +394,11 @@ function drawDeadly() {
     for(ii = 0; ii < 4; ii++) {
         spawnNewDeadly();
     }
+}
+
+function setPowerbar(_val) {
+    var widthToUse = _val / maxPower;
+    game.add.tween(powerbar).to( { width: widthToUse * 100 }, 100, Phaser.Easing.Linear.None, true);
 }
 
 function createLevelGraphics(_x, _y) {
