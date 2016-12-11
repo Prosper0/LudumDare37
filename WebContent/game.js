@@ -8,6 +8,7 @@ function preload() {
     game.load.image('block', 'assets/blockgreen.png');
     game.load.image('arrow', 'assets/arrow.png');
     game.load.image('deadly', 'assets/blockdeadghost.png');
+    game.load.image('deadlyparticle', 'assets/ghostparticle.png');
     game.load.image('coin', 'assets/coin.png');
     game.load.image('hero', 'assets/misc/hero.png');
 
@@ -18,6 +19,8 @@ var bricks;
 var arrow;
 var levelGraphics;
 var hud;
+
+var emitter;
 
 var hudHeight = 50;
 var gamePlayWidth = 320;
@@ -66,6 +69,32 @@ var levelDrawing = [
     [19*blockW, 10*blockW]
 ];
 
+var filter;
+var fragmentSrc = [
+        "precision mediump float;",
+        "uniform vec2      resolution;",
+        "uniform float     time;",
+
+        "void main( void )",
+        "{",
+            "vec2 p = ( gl_FragCoord.xy / resolution.xy ) * 2.0 - 1.0;",
+
+            "vec3 c = vec3( 0.0 );",
+
+            "float amplitude = 0.50;",
+            "float glowT = sin(time) * 0.5 + 0.5;",
+            "float glowFactor = mix( 0.15, 0.35, glowT );",
+
+            "c += vec3(0.02, 0.03, 0.13) * ( glowFactor * abs( 1.0 / sin(p.x + sin( p.y + time ) * amplitude ) ));",
+            "c += vec3(0.02, 0.10, 0.03) * ( glowFactor * abs( 1.0 / sin(p.x + cos( p.y + time+1.00 ) * amplitude+0.1 ) ));",
+            "c += vec3(0.15, 0.05, 0.20) * ( glowFactor * abs( 1.0 / sin(p.y + sin( p.x + time+1.30 ) * amplitude+0.15 ) ));",
+            "c += vec3(0.20, 0.05, 0.05) * ( glowFactor * abs( 1.0 / sin(p.y + cos( p.x + time+3.00 ) * amplitude+0.3 ) ));",
+            "c += vec3(0.17, 0.17, 0.05) * ( glowFactor * abs( 1.0 / sin(p.y + cos( p.x + time+5.00 ) * amplitude+0.2 ) ));",
+
+            "gl_FragColor = vec4( c, 1.0 );",
+        "}"
+    ];
+
 var deadlyGroup;
 
 var deadlyArrayKeepTrack = [];
@@ -98,6 +127,9 @@ function create() {
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
     s = game.add.tileSprite(0, 0, 320, 480, 'background');
+    
+    filter = new Phaser.Filter(game, null, fragmentSrc);
+    filter.setResolution(320, 480);
     
     drawLevel();
     drawCoins();
@@ -151,6 +183,7 @@ function update () {
         game.physics.arcade.collide(ball, levelGraphics, ballHitKnocker, null, this);
         game.physics.arcade.collide(ball, bricks, ballHitBrick, null, this);
         game.physics.arcade.collide(ball, deadlyGroup, ballHitDeadly, null, this);
+        game.physics.arcade.collide(levelGraphics, emitter, null, null, this);
 
         if(charging) {
             power = power + 10;
@@ -164,6 +197,8 @@ function update () {
         // update arrow position
         arrow.x=ball.x;
         arrow.y=ball.y;
+        
+        filter.update();
 
         deaccelareta();
     }
@@ -224,8 +259,13 @@ function ballHitBrick (_ball, _brick) {
         ball.body.velocity.set(0);
         ball.x = 100 + 16;
         ball.y = 100 - 16;
+        
+        levelGraphics.forEach(function(item){
+            item.filters = [ filter ];
+        });
 
-        revive();
+        game.input.onDown.add(revive, this);
+        //revive();
     }
 
 }
@@ -239,10 +279,33 @@ function ballHitHud(_ball, _hud) {
 }
 
 function ballHitDeadly(_ball, _deadly) {
+    emitter = game.add.emitter(0, 0, 100);
+    emitter.makeParticles('deadlyparticle', 0, 250, true, true);
+    emitter.gravity = 200;
+    emitter.bounce.setTo(0.5, 0.5);
+    
+    particleBurst(_deadly.x, _deadly.y);
     _deadly.kill();
     lives = lives - 1;
     livesText.text = 'lives: ' + lives;
     spawnNewDeadly();
+}
+
+function particleBurst(pointerx, pointery) {
+
+    emitter.x = pointerx;
+    emitter.y = pointery;
+
+    emitter.start(true, 4000, null, 10);
+
+    game.time.events.add(2000, destroyEmitter, this);
+
+}
+
+function destroyEmitter() {
+
+    //emitter.destroy();
+
 }
 
 function spawnNewDeadly() {
@@ -347,6 +410,10 @@ function isOverlapping(_sprite, _list) {
 function revive() {
     rotateSpeed = rotateSpeed + 1;
     velocityFriction = velocityFriction * 1.001;
+    levelGraphics.forEach(function(item){
+            item.filters = null;
+        });
+    game.input.onDown.remove(revive, this);
     
     deadlyArrayKeepTrack = [];
     coinArrayKeepTrack = [];
